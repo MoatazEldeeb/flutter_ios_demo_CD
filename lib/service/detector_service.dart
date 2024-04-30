@@ -311,10 +311,6 @@ class _DetectorServer {
 
         Rect rec = Rect.fromCenter(center: Offset(output[1],output[2]), width: output[3], height: output[4]);
         // Rect.fromLTWH(left, top, width, height)
-        print("Rect Left: ${rec.left}");
-        print("Rect Right: ${rec.right}");
-        print("Rect Width: ${rec.width}");
-        print("Rect Height: ${rec.height}");
 
 
         Recognition r = Recognition(output[5].round(),className,output[6],rec);
