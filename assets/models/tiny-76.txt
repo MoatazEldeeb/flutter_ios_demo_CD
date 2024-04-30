@@ -1,0 +1,10 @@
+Bench
+Chair
+Downstairs
+Elevator
+isText
+Stairs
+Table
+closedDoor
+openedDoor
+Person
