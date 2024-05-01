@@ -108,17 +108,22 @@ class Detector {
   }
 
   static Future<Interpreter> _loadModel() async {
+
     final interpreterOptions = InterpreterOptions();
 
-    // Use XNNPACK Delegate
+    // // Use XNNPACK Delegate
     // if (Platform.isAndroid) {
-    //   interpreterOptions.addDelegate(XNNPackDelegate());
+    //   interpreterOptions.addDelegate(GpuDelegateV2());
+    // }
+    // else if(Platform.isIOS){
+    //   interpreterOptions.addDelegate(CoreMlDelegate());
     // }
 
     return Interpreter.fromAsset(
       _modelPath,
       options: interpreterOptions..threads = 4,
     );
+
   }
 
   static Future<List<String>> _loadLabels() async {
@@ -309,10 +314,8 @@ class _DetectorServer {
         print(output);
         String className = _labels![output[5].round()];
 
-        Rect rec = Rect.fromCenter(center: Offset(output[1],output[2]), width: output[3], height: output[4]);
-        // Rect.fromLTWH(left, top, width, height)
-
-
+        Rect rec = Rect.fromLTRB(output[1], output[2], output[3], output[4]);
+        
         Recognition r = Recognition(output[5].round(),className,output[6],rec);
         recognitions.add(r);
       }
