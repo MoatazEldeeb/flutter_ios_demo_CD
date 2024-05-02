@@ -58,6 +58,12 @@ class _DetectorWidgetState extends State<DetectorWidget>
       setState(() {
         _detector = instance;
         _subscription = instance.resultsStream.stream.listen((values) {
+          if(values["OCR_result"] as String != "") {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(values["OCR_result"]),
+            ));
+          }
+
           setState(() {
             results = values['recognitions'];
             stats = values['stats'];
@@ -143,17 +149,6 @@ class _DetectorWidgetState extends State<DetectorWidget>
 
     return Stack(
         children: results!.map((box) {
-          if(box.text!= ""){
-            Fluttertoast.showToast(
-                msg: box.text,
-                toastLength: Toast.LENGTH_SHORT,
-                gravity: ToastGravity.BOTTOM,
-                timeInSecForIosWeb: 1,
-                backgroundColor: Colors.red,
-                textColor: Colors.white,
-                fontSize: 16.0
-            );
-          }
           return BoxWidget(result: box);
         }).toList()
     );

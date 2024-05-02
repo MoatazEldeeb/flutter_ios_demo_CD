@@ -11,6 +11,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:live_object_detection_ssd_mobilenet/models/recognition.dart';
@@ -21,16 +22,6 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 ///////////////////////////////////////////////////////////////////////////////
-// **WARNING:** This is not production code and is only intended to be used for
-// demonstration purposes.
-//
-// The following Detector example works by spawning a background isolate and
-// communicating with it over Dart's SendPort API. It is presented below as a
-// demonstration of the feature "Background Isolate Channels" and shows using
-// plugins from a background isolate. The [Detector] operates on the root
-// isolate and the [_DetectorServer] operates on a background isolate.
-//
-// Here is an example of the protocol they use to communicate:
 //
 //  _________________                         ________________________
 //  [:Detector]                               [:_DetectorServer]
@@ -83,8 +74,11 @@ class Detector {
   late final Interpreter _interpreter;
   late final List<String> _labels;
 
+  late final FlutterTts _flutterTts;
+
   // To be used by detector (from UI) to send message to our Service ReceivePort
   late final SendPort _sendPort;
+
 
   bool _isReady = false;
 
@@ -154,6 +148,11 @@ class Detector {
         // invoke [BackgroundIsolateBinaryMessenger.ensureInitialized].
         // ----------------------------------------------------------------------
         RootIsolateToken rootIsolateToken = RootIsolateToken.instance!;
+        _flutterTts = FlutterTts();
+        _flutterTts.setLanguage('en-US');
+        _flutterTts.setPitch(0.9);
+        _flutterTts.setVolume(1);
+        _flutterTts.setSpeechRate(0.5);
         _sendPort.send(_Command(_Codes.init, args: [
           rootIsolateToken,
           _interpreter.address,
@@ -165,10 +164,17 @@ class Detector {
         _isReady = false;
       case _Codes.result:
         _isReady = true;
+        final String toBeSpoken = command.args?[1] as String;
+        _speak(toBeSpoken);
         resultsStream.add(command.args?[0] as Map<String, dynamic>);
       default:
         debugPrint('Detector unrecognized command: ${command.code}');
     }
+  }
+
+  void _speak(String toBeSpoken)async {
+    await _flutterTts.awaitSpeakCompletion(true);
+    await _flutterTts.speak(toBeSpoken);
   }
 
   /// Kills the background isolate and its detector server.
@@ -195,6 +201,11 @@ class _DetectorServer {
   final SendPort _sendPort;
 
   TextRecognizer? _textRecognizer;
+
+  String toBeSpoken = "";
+
+  String OCR_result ="";
+  bool isText = false;
 
   // ----------------------------------------------------------------------
   // Here the plugin is used from the background isolate.
@@ -246,20 +257,20 @@ class _DetectorServer {
   void _convertCameraImage(CameraImage cameraImage) {
     var preConversionTime = DateTime.now().millisecondsSinceEpoch;
 
-    convertCameraImageToImage(cameraImage).then((image) async {
+    convertCameraImageToImage(cameraImage).then((image) {
       if (image != null) {
         if (Platform.isAndroid) {
           image = image_lib.copyRotate(image, angle: 90);
         }
 
-        final results = await analyseImage(image, preConversionTime,cameraImage);
-        _sendPort.send(_Command(_Codes.result, args: [results]));
+        final results = analyseImage(image, preConversionTime,cameraImage);
+        _sendPort.send(_Command(_Codes.result, args: [results,toBeSpoken]));
       }
     });
   }
 
-  Future<Map<String, dynamic>> analyseImage(
-      image_lib.Image? image, int preConversionTime, CameraImage cameraImage) async {
+  Map<String, dynamic> analyseImage(
+      image_lib.Image? image, int preConversionTime, CameraImage cameraImage) {
     var conversionElapsedTime =
         DateTime.now().millisecondsSinceEpoch - preConversionTime;
 
@@ -316,67 +327,34 @@ class _DetectorServer {
     List<dynamic> recogs = _runInference(imageMatrix);
 
     List<Recognition> recognitions = [];
-
+    toBeSpoken= "";
+    isText =false;
     for( List<dynamic> output in recogs){
       if(output[6]>confidence){
         String className = _labels![output[5].round()];
 
-        if(className == "isText"){
-          String OCR_result = await _runOCR(cameraImage);
+
+        if(className == "isText"  ){
+          _runOCR(cameraImage);
+          toBeSpoken += "Text: $OCR_result";
 
           Rect rec = Rect.fromLTRB(output[1], output[2], output[3], output[4]);
 
-          Recognition r = Recognition(output[5].round(),className,output[6],OCR_result,rec);
+          Recognition r = Recognition(output[5].round(),className,output[6],rec);
           recognitions.add(r);
         }else{
+
+          toBeSpoken += "$className, ";
           Rect rec = Rect.fromLTRB(output[1], output[2], output[3], output[4]);
 
-          Recognition r = Recognition(output[5].round(),className,output[6],"",rec);
+          Recognition r = Recognition(output[5].round(),className,output[6],rec);
           recognitions.add(r);
         }
-
       }
-
     }
-
-    // Location
-    // final locationsRaw = output.first.first as List<List<double>>;
-    //
-    // final List<Rect> locations = locationsRaw
-    //     .map((list) => list.map((value) => (value * mlModelInputSize)).toList())
-    //     .map((rect) => Rect.fromLTRB(rect[1], rect[0], rect[3], rect[2]))
-    //     .toList();
-    //
-    // // Classes
-    // final classesRaw = output.elementAt(1).first as List<double>;
-    // final classes = classesRaw.map((value) => value.toInt()).toList();
-    //
-    // // Scores
-    // final scores = output.elementAt(2).first as List<double>;
-    //
-    // // Number of detections
-    // final numberOfDetectionsRaw = output.last.first as double;
-    // final numberOfDetections = numberOfDetectionsRaw.toInt();
-    //
-    // final List<String> classification = [];
-    // for (var i = 0; i < numberOfDetections; i++) {
-    //   classification.add(_labels![classes[i]]);
-    // }
-    //
-    // /// Generate recognitions
-    // List<Recognition> recognitions = [];
-    // for (int i = 0; i < numberOfDetections; i++) {
-    //   // Prediction score
-    //   var score = scores[i];
-    //   // Label string
-    //   var label = classification[i];
-    //
-    //   if (score > confidence) {
-    //     recognitions.add(
-    //       Recognition(i, label, score, locations[i]),
-    //     );
-    //   }
-    // }
+    if(!isText){
+      OCR_result = "";
+    }
 
     var inferenceElapsedTime =
         DateTime.now().millisecondsSinceEpoch - inferenceTimeStart;
@@ -393,6 +371,7 @@ class _DetectorServer {
         'Total prediction time:': totalElapsedTime.toString(),
         'Frame': '${image.width} X ${image.height}',
       },
+      "OCR_result":OCR_result
     };
   }
 
@@ -421,7 +400,8 @@ class _DetectorServer {
     return recognitions;
   }
 
-  Future<String> _runOCR(CameraImage cameraImage) async{
+  void _runOCR(CameraImage cameraImage) {
+    isText =true;
     final plane = cameraImage.planes.first;
     InputImageFormat? format = InputImageFormatValue.fromRawValue(cameraImage!.format.raw);
     // InputImage
@@ -433,15 +413,12 @@ class _DetectorServer {
           bytesPerRow: plane.bytesPerRow,
         ));
     // image_lib.decode
-    String objectDetectionRecognitions = "";
-    final RecognizedText recognizedText =  await _textRecognizer!.processImage(inputImage);
+     _textRecognizer!.processImage(inputImage).then((recognizedText){
+       OCR_result ="";
+       for (TextBlock block in recognizedText.blocks) {
+         OCR_result+= block.text + " ";
+       }
+     });
 
-      for (TextBlock block in recognizedText.blocks) {
-        objectDetectionRecognitions+= block.text + " ";
-      }
-
-
-
-    return objectDetectionRecognitions;
   }
 }

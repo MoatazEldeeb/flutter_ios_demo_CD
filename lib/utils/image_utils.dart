@@ -8,7 +8,6 @@ import 'package:image/image.dart' as image_lib;
 Future<image_lib.Image?> convertCameraImageToImage(
     CameraImage cameraImage) async {
   image_lib.Image image;
-  print(cameraImage.format.group);
   if (cameraImage.format.group == ImageFormatGroup.yuv420) {
     image = convertYUV420ToImage(cameraImage);
   } else if (cameraImage.format.group == ImageFormatGroup.bgra8888) {
@@ -97,11 +96,7 @@ image_lib.Image convertJPEGToImage(CameraImage cameraImage) {
 
 image_lib.Image convertNV21ToImage(CameraImage cameraImage) {
   // Extract the bytes from the CameraImage
-  print("1");
   final yuvBytes = cameraImage.planes[0].bytes;
-  print("1");
-  // final vuBytes = cameraImage.planes[1].bytes;
-  // print("1");
 
   // Create a new Image instance
   final image = image_lib.Image(
