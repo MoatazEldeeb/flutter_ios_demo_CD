@@ -12,19 +12,24 @@ class Recognition {
   /// Confidence [0.0, 1.0]
   final double _score;
 
+  /// If isText class then OCR_Result
+  final String _text;
+
   /// Location of bounding box rect
   ///
   /// The rectangle corresponds to the raw input image
   /// passed for inference
   final Rect _location;
 
-  Recognition(this._id, this._label, this._score, this._location);
+  Recognition(this._id, this._label, this._score, this._text, this._location);
 
   int get id => _id;
 
   String get label => _label;
 
   double get score => _score;
+
+  String get text => _text;
 
   Rect get location => _location;
 
@@ -47,6 +52,6 @@ class Recognition {
 
   @override
   String toString() {
-    return 'Recognition(id: $id, label: $label, score: $score, location: $location)';
+    return 'Recognition(id: $id, label: $label, score: $score, text: $text, location: $location)';
   }
 }

@@ -9,12 +9,16 @@ import 'dart:isolate';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:live_object_detection_ssd_mobilenet/models/recognition.dart';
 import 'package:live_object_detection_ssd_mobilenet/utils/image_utils.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
+
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 ///////////////////////////////////////////////////////////////////////////////
 // **WARNING:** This is not production code and is only intended to be used for
@@ -178,7 +182,7 @@ class Detector {
 /// This is where we use the new feature Background Isolate Channels, which
 /// allows us to use plugins from background isolates.
 class _DetectorServer {
-  /// Input size of image (height = width = 300)
+  /// Input size of image (height = width = 640)
   static const int mlModelInputSize = 640;
 
   /// Result confidence threshold
@@ -189,6 +193,8 @@ class _DetectorServer {
   _DetectorServer(this._sendPort);
 
   final SendPort _sendPort;
+
+  TextRecognizer? _textRecognizer;
 
   // ----------------------------------------------------------------------
   // Here the plugin is used from the background isolate.
@@ -226,6 +232,7 @@ class _DetectorServer {
         // ----------------------------------------------------------------------
         BackgroundIsolateBinaryMessenger.ensureInitialized(rootIsolateToken);
         _interpreter = Interpreter.fromAddress(command.args?[1] as int);
+        _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
         _labels = command.args?[2] as List<String>;
         _sendPort.send(const _Command(_Codes.ready));
       case _Codes.detect:
@@ -239,20 +246,20 @@ class _DetectorServer {
   void _convertCameraImage(CameraImage cameraImage) {
     var preConversionTime = DateTime.now().millisecondsSinceEpoch;
 
-    convertCameraImageToImage(cameraImage).then((image) {
+    convertCameraImageToImage(cameraImage).then((image) async {
       if (image != null) {
         if (Platform.isAndroid) {
           image = image_lib.copyRotate(image, angle: 90);
         }
 
-        final results = analyseImage(image, preConversionTime);
+        final results = await analyseImage(image, preConversionTime,cameraImage);
         _sendPort.send(_Command(_Codes.result, args: [results]));
       }
     });
   }
 
-  Map<String, dynamic> analyseImage(
-      image_lib.Image? image, int preConversionTime) {
+  Future<Map<String, dynamic>> analyseImage(
+      image_lib.Image? image, int preConversionTime, CameraImage cameraImage) async {
     var conversionElapsedTime =
         DateTime.now().millisecondsSinceEpoch - preConversionTime;
 
@@ -309,15 +316,25 @@ class _DetectorServer {
     List<dynamic> recogs = _runInference(imageMatrix);
 
     List<Recognition> recognitions = [];
+
     for( List<dynamic> output in recogs){
       if(output[6]>confidence){
-        print(output);
         String className = _labels![output[5].round()];
 
-        Rect rec = Rect.fromLTRB(output[1], output[2], output[3], output[4]);
-        
-        Recognition r = Recognition(output[5].round(),className,output[6],rec);
-        recognitions.add(r);
+        if(className == "isText"){
+          String OCR_result = await _runOCR(cameraImage);
+
+          Rect rec = Rect.fromLTRB(output[1], output[2], output[3], output[4]);
+
+          Recognition r = Recognition(output[5].round(),className,output[6],OCR_result,rec);
+          recognitions.add(r);
+        }else{
+          Rect rec = Rect.fromLTRB(output[1], output[2], output[3], output[4]);
+
+          Recognition r = Recognition(output[5].round(),className,output[6],"",rec);
+          recognitions.add(r);
+        }
+
       }
 
     }
@@ -401,7 +418,30 @@ class _DetectorServer {
     List<dynamic> recognitions = List.filled(30*7, 0).reshape([30,7]);
 
     _interpreter!.run([imageMatrix], recognitions);
-    // print(recognitions);
     return recognitions;
+  }
+
+  Future<String> _runOCR(CameraImage cameraImage) async{
+    final plane = cameraImage.planes.first;
+    InputImageFormat? format = InputImageFormatValue.fromRawValue(cameraImage!.format.raw);
+    // InputImage
+    final inputImage = InputImage.fromBytes(bytes: plane.bytes,
+        metadata: InputImageMetadata(
+          size: Size(cameraImage.width.toDouble(), cameraImage.height.toDouble()),
+          rotation: InputImageRotation.rotation0deg, // used only in Android
+          format: format!, // used only in iOS
+          bytesPerRow: plane.bytesPerRow,
+        ));
+    // image_lib.decode
+    String objectDetectionRecognitions = "";
+    final RecognizedText recognizedText =  await _textRecognizer!.processImage(inputImage);
+
+      for (TextBlock block in recognizedText.blocks) {
+        objectDetectionRecognitions+= block.text + " ";
+      }
+
+
+
+    return objectDetectionRecognitions;
   }
 }

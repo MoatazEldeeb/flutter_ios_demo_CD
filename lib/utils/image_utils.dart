@@ -8,7 +8,7 @@ import 'package:image/image.dart' as image_lib;
 Future<image_lib.Image?> convertCameraImageToImage(
     CameraImage cameraImage) async {
   image_lib.Image image;
-
+  print(cameraImage.format.group);
   if (cameraImage.format.group == ImageFormatGroup.yuv420) {
     image = convertYUV420ToImage(cameraImage);
   } else if (cameraImage.format.group == ImageFormatGroup.bgra8888) {
@@ -27,13 +27,14 @@ Future<image_lib.Image?> convertCameraImageToImage(
 image_lib.Image convertYUV420ToImage(CameraImage cameraImage) {
   final width = cameraImage.width;
   final height = cameraImage.height;
-
   final uvRowStride = cameraImage.planes[1].bytesPerRow;
   final uvPixelStride = cameraImage.planes[1].bytesPerPixel!;
 
   final yPlane = cameraImage.planes[0].bytes;
   final uPlane = cameraImage.planes[1].bytes;
   final vPlane = cameraImage.planes[2].bytes;
+  // print("Y plane Length ${yPlane.length}");
+
 
   final image = image_lib.Image(width: width, height: height);
 
@@ -96,8 +97,11 @@ image_lib.Image convertJPEGToImage(CameraImage cameraImage) {
 
 image_lib.Image convertNV21ToImage(CameraImage cameraImage) {
   // Extract the bytes from the CameraImage
+  print("1");
   final yuvBytes = cameraImage.planes[0].bytes;
-  final vuBytes = cameraImage.planes[1].bytes;
+  print("1");
+  // final vuBytes = cameraImage.planes[1].bytes;
+  // print("1");
 
   // Create a new Image instance
   final image = image_lib.Image(
@@ -108,7 +112,7 @@ image_lib.Image convertNV21ToImage(CameraImage cameraImage) {
   // Convert NV21 to RGB
   convertNV21ToRGB(
     yuvBytes,
-    vuBytes,
+    // vuBytes,
     cameraImage.width,
     cameraImage.height,
     image,
@@ -117,11 +121,10 @@ image_lib.Image convertNV21ToImage(CameraImage cameraImage) {
   return image;
 }
 
-void convertNV21ToRGB(Uint8List yuvBytes, Uint8List vuBytes, int width,
+void convertNV21ToRGB(Uint8List yuvBytes,  int width,
     int height, image_lib.Image image) {
   // Conversion logic from NV21 to RGB
   // ...
-
   // Example conversion logic using the `imageLib` package
   // This is just a placeholder and may not be the most efficient method
   for (var y = 0; y < height; y++) {
@@ -130,8 +133,8 @@ void convertNV21ToRGB(Uint8List yuvBytes, Uint8List vuBytes, int width,
       final uvIndex = (y ~/ 2) * (width ~/ 2) + (x ~/ 2);
 
       final yValue = yuvBytes[yIndex];
-      final uValue = vuBytes[uvIndex * 2];
-      final vValue = vuBytes[uvIndex * 2 + 1];
+      final uValue = yuvBytes[uvIndex * 2 +((yuvBytes.length * 2)/3).round()];
+      final vValue = yuvBytes[uvIndex * 2 + 1 +((yuvBytes.length * 2)/3).round()];
 
       // Convert YUV to RGB
       final r = yValue + 1.402 * (vValue - 128);

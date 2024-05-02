@@ -13,6 +13,14 @@ class BoxWidget extends StatelessWidget {
     Color color = Colors.primaries[
         (result.label.length + result.label.codeUnitAt(0) + result.id) %
             Colors.primaries.length];
+    // print("HERE");
+    // print(result.text);
+    // if(result.text !=""){
+    //   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+    //     content: Text("Sending Message"),
+    //   ));
+    // }
+
 
     return Positioned(
       left: result.renderLocation.left,

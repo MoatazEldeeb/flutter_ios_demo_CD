@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:live_object_detection_ssd_mobilenet/models/recognition.dart';
 import 'package:live_object_detection_ssd_mobilenet/models/screen_params.dart';
 import 'package:live_object_detection_ssd_mobilenet/service/detector_service.dart';
@@ -73,6 +75,9 @@ class _DetectorWidgetState extends State<DetectorWidget>
       cameras[0],
       ResolutionPreset.medium,
       enableAudio: false,
+      imageFormatGroup: Platform.isAndroid
+          ? ImageFormatGroup.nv21 // for Android
+          : ImageFormatGroup.bgra8888, // for iOS
     )..initialize().then((_) async {
         await _controller.startImageStream(onLatestImageAvailable);
         setState(() {});
@@ -133,8 +138,26 @@ class _DetectorWidgetState extends State<DetectorWidget>
     if (results == null) {
       return const SizedBox.shrink();
     }
+    // return Stack(
+    //     children: results!.toList());
+
     return Stack(
-        children: results!.map((box) => BoxWidget(result: box)).toList());
+        children: results!.map((box) {
+          if(box.text!= ""){
+            Fluttertoast.showToast(
+                msg: box.text,
+                toastLength: Toast.LENGTH_SHORT,
+                gravity: ToastGravity.BOTTOM,
+                timeInSecForIosWeb: 1,
+                backgroundColor: Colors.red,
+                textColor: Colors.white,
+                fontSize: 16.0
+            );
+          }
+          return BoxWidget(result: box);
+        }).toList()
+    );
+
   }
 
   /// Callback to receive each frame [CameraImage] perform inference on it
